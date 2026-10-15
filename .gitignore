@@ -13,6 +13,9 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+*.db
+*.sqlite3
+*.sqlite
 
 # Node / Frontend
 node_modules/
