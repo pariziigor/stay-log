@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PropertiesPage } from './pages/PropertiesPage';
 import { TasksPage } from './pages/TasksPage';
+import { AIAssistantPage } from './pages/AIAssistantPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export const App: React.FC = () => {
@@ -34,7 +35,14 @@ export const App: React.FC = () => {
             <Route path="/bookings" element={<DashboardPage />} />
             <Route path="/inventory" element={<DashboardPage />} />
             <Route path="/finance" element={<DashboardPage />} />
-            <Route path="/ai-assistant" element={<DashboardPage />} />
+            <Route
+              path="/ai-assistant"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'owner']}>
+                  <AIAssistantPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/users"
               element={

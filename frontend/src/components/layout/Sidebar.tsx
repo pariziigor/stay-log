@@ -43,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         { label: 'Todos os Imóveis', path: '/properties', icon: Building2 },
         { label: 'Reservas Globais', path: '/bookings', icon: CalendarDays },
         { label: 'Operações & Equipe', path: '/tasks', icon: CheckSquare },
+        { label: 'Assistente IA', path: '/ai-assistant', icon: Bot, badge: 'IA' },
         { label: 'Gestão de Usuários', path: '/users', icon: Users, badge: 'Admin' },
         { label: 'Configurações', path: '/settings', icon: Settings },
       ];

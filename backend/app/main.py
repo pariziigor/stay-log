@@ -20,6 +20,12 @@ from app.modules.properties.infrastructure.models import (
     PropertyModel,
 )
 from app.modules.properties.presentation.routes import router as properties_router
+from app.modules.ai_assistant.infrastructure.models import (
+    AIConversationModel,
+    AIInsightModel,
+    AIMessageModel,
+)
+from app.modules.ai_assistant.presentation.routes import router as ai_router
 
 
 @asynccontextmanager
@@ -103,6 +109,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 # --- Rotas da API ---
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(properties_router, prefix=settings.API_V1_STR)
+app.include_router(ai_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health", tags=["Infraestrutura"], summary="Verificação de integridade da API")
