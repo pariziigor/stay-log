@@ -23,7 +23,7 @@ Plataforma web para pessoas físicas e pequenos empreendedores gerenciarem imóv
 |---|---|---|
 | 1 | Modelagem de dados e script SQL | ✅ [docs](docs/etapa-1-modelagem-de-dados.md) |
 | 2 | Backend FastAPI (DDD): Autenticação e Imóveis | ✅ [docs](docs/etapa-2-setup-backend.md) |
-| 3 | Frontend React + Vite: autenticação JWT e layout base | ⏳ |
+| 3 | Frontend React + Vite: autenticação JWT e layout base | ✅ [docs](docs/etapa-3-setup-frontend.md) |
 | 4 | Integração e Assistente de IA | ⏳ |
 
 ## Estrutura
@@ -33,6 +33,9 @@ Plataforma web para pessoas físicas e pequenos empreendedores gerenciarem imóv
 ├── backend/             # API Python + FastAPI estruturada em Domain-Driven Design (DDD)
 │   ├── app/             # Core, Shared Kernel e Módulos (Identity, Properties)
 │   └── tests/           # Suíte de testes unitários e de integração
+├── frontend/            # Aplicação React 18 + TypeScript + Vite + Tailwind CSS
+│   ├── src/             # Componentes modernos com Framer Motion, páginas e serviços
+│   └── package.json
 ├── database/
 │   └── init/            # DDL e seed (executados automaticamente pelo docker compose)
 ├── docs/                # Documentação técnica por etapa
