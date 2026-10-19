@@ -69,7 +69,11 @@ async def get_conversation_messages(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.OWNER)),
     ai_service: AIAssistantService = Depends(get_ai_service),
 ) -> List[ChatMessageResponseDTO]:
-    return await ai_service.get_messages(conversation_id=conversation_id)
+    return await ai_service.get_messages(
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        is_admin=(current_user.role == UserRole.ADMIN),
+    )
 
 
 @router.get(
@@ -95,4 +99,8 @@ async def dismiss_insight(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.OWNER)),
     ai_service: AIAssistantService = Depends(get_ai_service),
 ) -> None:
-    await ai_service.dismiss_insight(insight_id=insight_id)
+    await ai_service.dismiss_insight(
+        insight_id=insight_id,
+        user_id=current_user.id,
+        is_admin=(current_user.role == UserRole.ADMIN),
+    )

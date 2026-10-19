@@ -197,6 +197,12 @@ class SQLAlchemyAIAssistantRepository(AIAssistantRepository):
         result = await self._session.execute(stmt)
         return [self._to_domain_insight(m) for m in result.scalars().all()]
 
+    async def get_insight_by_id(self, insight_id: uuid.UUID) -> Optional[AIInsight]:
+        stmt = select(AIInsightModel).where(AIInsightModel.id == insight_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_domain_insight(model) if model else None
+
     async def dismiss_insight(self, insight_id: uuid.UUID) -> None:
         stmt = (
             update(AIInsightModel)

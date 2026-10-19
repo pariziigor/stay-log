@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import uuid
+from app.core.exceptions import EntityNotFoundError, ForbiddenError
 from app.modules.ai_assistant.application.context_builder import OperationalContextBuilder
 from app.modules.ai_assistant.application.dtos import (
     AIInsightResponseDTO,
@@ -49,6 +50,8 @@ class AIAssistantService:
                     title="Consulta Operacional",
                 )
                 await self._ai_repo.save(conversation)
+            elif conversation.user_id != user_id:
+                raise ForbiddenError("Acesso negado: a conversa informada pertence a outro usuário.")
         else:
             conversation = AIConversation(
                 user_id=user_id,
@@ -217,7 +220,18 @@ Como posso ajudar você agora? Posso detalhar a precificação, auditar os check
             for c in conversations
         ]
 
-    async def get_messages(self, conversation_id: uuid.UUID) -> List[ChatMessageResponseDTO]:
+    async def get_messages(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+        is_admin: bool = False,
+    ) -> List[ChatMessageResponseDTO]:
+        conversation = await self._ai_repo.get_by_id(conversation_id)
+        if conversation is None:
+            raise EntityNotFoundError("Conversa", conversation_id)
+        if not is_admin and conversation.user_id != user_id:
+            raise ForbiddenError("Acesso negado: você não tem permissão para acessar esta conversa.")
+
         messages = await self._ai_repo.list_messages(conversation_id)
         return [
             ChatMessageResponseDTO(
@@ -258,5 +272,15 @@ Como posso ajudar você agora? Posso detalhar a precificação, auditar os check
             for i in insights
         ]
 
-    async def dismiss_insight(self, insight_id: uuid.UUID) -> None:
+    async def dismiss_insight(
+        self,
+        insight_id: uuid.UUID,
+        user_id: uuid.UUID,
+        is_admin: bool = False,
+    ) -> None:
+        insight = await self._ai_repo.get_insight_by_id(insight_id)
+        if insight is None:
+            raise EntityNotFoundError("Insight", insight_id)
+        if not is_admin and insight.owner_id != user_id:
+            raise ForbiddenError("Acesso negado: você não tem permissão para dispensar este insight.")
         await self._ai_repo.dismiss_insight(insight_id)

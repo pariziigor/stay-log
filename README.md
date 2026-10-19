@@ -25,6 +25,7 @@ Plataforma web para pessoas físicas e pequenos empreendedores gerenciarem imóv
 | 2 | Backend FastAPI (DDD): Autenticação e Imóveis | ✅ [docs](docs/etapa-2-setup-backend.md) |
 | 3 | Frontend React + Vite: autenticação JWT e layout base | ✅ [docs](docs/etapa-3-setup-frontend.md) |
 | 4 | Integração e Assistente de IA | ✅ [docs](docs/etapa-4-integracao-e-ia.md) |
+| 5 | Testes do Sistema (Automatizados e Manuais) | ✅ [docs](docs/etapa-5-testes-do-sistema.md) |
 
 ## Estrutura
 
@@ -32,13 +33,14 @@ Plataforma web para pessoas físicas e pequenos empreendedores gerenciarem imóv
 .
 ├── backend/             # API Python + FastAPI estruturada em Domain-Driven Design (DDD)
 │   ├── app/             # Core, Shared Kernel e Módulos (Identity, Properties, AI Assistant)
-│   └── tests/           # Suíte de testes unitários e de integração (11 testes automatizados)
+│   └── tests/           # Suíte de testes unitários, integração e performance (18 testes Pytest)
 ├── frontend/            # Aplicação React 18 + TypeScript + Vite + Tailwind CSS
-│   ├── src/             # Componentes modernos com Framer Motion, páginas e serviços
+│   ├── src/             # Componentes modernos com Framer Motion, páginas, serviços e testes
+│   │   └── __tests__/   # Suíte de testes unitários e de lógica (18 testes Vitest)
 │   └── package.json
 ├── database/
 │   └── init/            # DDL e seed (executados automaticamente pelo docker compose)
-├── docs/                # Documentação técnica por etapa
+├── docs/                # Documentação técnica por etapa (Etapas 1 a 5)
 ├── docker-compose.yml
 └── .env.example
 ```

@@ -59,5 +59,9 @@ class AIAssistantRepository(BaseRepository[AIConversation]):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_insight_by_id(self, insight_id: uuid.UUID) -> Optional[AIInsight]:
+        raise NotImplementedError
+
+    @abstractmethod
     async def dismiss_insight(self, insight_id: uuid.UUID) -> None:
         raise NotImplementedError
