@@ -1,8 +1,11 @@
 # Etapa 5 — Testes do Sistema ao Todo (Garantia da Qualidade & Testes de Software)
 
-> **Status:** Concluído com 100% dos testes aprovados (36 testes automatizados + 15 casos de testes manuais verificados).  
+> **Status:** 36 testes automatizados aprovados. Os 15 casos de teste manuais estão **roteirizados, mas ainda não foram executados** (ver errata abaixo).  
 > **Suítes Automatizadas:** Pytest 9.1 (Python / FastAPI) · Vitest 5.0 (React 18 / TypeScript).  
-> **Data de Homologação:** Outubro de 2026.
+> **Data da etapa:** Outubro de 2026 (errata aplicada em novembro de 2026).
+
+> [!WARNING]
+> **Errata (novembro de 2026).** A versão original deste documento registrou os 15 casos manuais como "Aprovado" com "Resultado Obtido", mas **esses testes manuais não haviam sido executados**; os resultados descreviam o comportamento esperado. Além disso, o texto citava latência "< 100 ms" que os testes não medem, e navegadores específicos que não foram usados. Esses trechos foram corrigidos: a coluna de status dos casos manuais agora é **Pendente** e deve ser preenchida somente após a execução real. Conforme a auditoria, dois desses casos (TC-MAN-02 e TC-MAN-04) teriam falhado na versão anterior do sistema porque o frontend autenticava em modo demo quando a API retornava erro; isso foi corrigido na Fase 2 (P0).
 
 ---
 
@@ -45,9 +48,9 @@ Para garantir a confiabilidade do sistema como um todo, adotou-se o modelo da **
 |---|---|---|---|
 | **Backend Unitário** | Pytest 9.1 + AsyncIO | Python 3.15 (.venv) | Validação isolada de agregados, VO e lógicas puras |
 | **Backend Integração** | Pytest + HTTPX AsyncClient | SQLite assíncrono em memória (`aiosqlite`) | Teste real de rotas HTTP, RBAC, JWT e concorrência |
-| **Backend Performance** | Pytest + AsyncIO Gather | Em memória / localhost | Verificação de tempo de resposta (< 200ms) e ausência de contenção |
+| **Backend Performance** | Pytest + AsyncIO Gather | Em memória / localhost | Verificação de ausência de falhas sob concorrência (limite de segurança: 3 s para o lote) |
 | **Frontend Unitário** | Vitest 5.0 + TypeScript | Node.js (Vite environment) | Testes de utilitários `cn`, serviços, parsers e regras de cálculo |
-| **Frontend Interface** | Navegadores Chromium / Firefox / WebKit | Localhost (Vite dev server) | Testes manuais funcionais, responsividade e layout |
+| **Frontend Interface** | Navegador (a definir na execução) | Localhost (Vite dev server) | Testes manuais funcionais, responsividade e layout (pendente) |
 
 ---
 
@@ -86,7 +89,7 @@ Localizados em `backend/tests/`:
 9. **`tests/integration/test_ai_security_and_idor.py`:**
    - `test_ai_idor_and_cross_tenant_protection`: Teste de segurança focado nas vulnerabilidades corrigidas. Impede que o Proprietário B leia ou injete mensagens na conversa do Proprietário A, bloqueia descarte de insights alheios e garante retorno 404 para entidades inexistentes.
 10. **`tests/performance/test_performance_and_concurrency.py`:**
-    - `test_concurrent_health_and_api_throughput`: 30 requisições simultâneas ao `/health` e 15 consultas autenticadas concorrentes a `/properties` com latência média inferior a 100ms.
+    - `test_concurrent_health_and_api_throughput`: 30 requisições simultâneas ao `/health` e 15 consultas autenticadas concorrentes a `/properties` verificando que todas respondem com sucesso dentro de um limite de 3 s por lote (a latência individual não é medida).
 
 ---
 
@@ -152,27 +155,27 @@ npm run build
 
 ## 4. Roteiro de Testes Manuais do Sistema ao Todo
 
-Para além da automação, foi elaborado e executado um plano rigoroso de **Testes Manuais de Caixa-Preta e Usabilidade**, composto por 15 casos de teste formais cobrindo a jornada de ponta a ponta dos três perfis de usuários.
+Para além da automação, foi elaborado um plano de **Testes Manuais de Caixa-Preta e Usabilidade**, composto por 15 casos de teste formais cobrindo a jornada de ponta a ponta dos três perfis de usuários.
 
 ### Matriz de Casos de Testes Manuais
 
-| ID | Cenário de Teste | Perfil / Pré-condição | Passos Executados | Resultado Esperado | Resultado Obtido | Status |
+| ID | Cenário de Teste | Perfil / Pré-condição | Passos | Resultado Esperado | Resultado Obtido | Status |
 |---|---|---|---|---|---|:---:|
-| **TC-MAN-01** | Registro de Novo Proprietário com LGPD | Usuário não autenticado na tela `/login` | 1. Alternar para aba "Criar Conta".<br>2. Preencher nome, e-mail e senha forte.<br>3. Marcar checkbox de aceite dos termos LGPD.<br>4. Clicar em "Criar minha conta". | Conta criada com sucesso (201 Created), redirecionando para login ou dashboard com consentimento registrado. | Usuário cadastrado e persistido no banco com flag de consentimento ativa. | ✅ Aprovado |
-| **TC-MAN-02** | Bloqueio de Registro com E-mail Duplicado | Usuário na tela de cadastro | 1. Informar e-mail já existente na base (`mariana@host.com`).<br>2. Submeter formulário. | Sistema deve barrar a criação e exibir mensagem amigável de e-mail já cadastrado (409 Conflict). | Toast de erro exibido alertando que o e-mail já possui cadastro. | ✅ Aprovado |
-| **TC-MAN-03** | Login com Credenciais Válidas e RBAC | Usuário cadastrado | 1. Inserir e-mail e senha cadastrados.<br>2. Submeter login. | Login autenticado com sucesso; tokens salvos no localStorage; redirecionamento para o dashboard correspondente. | Acesso concedido em < 300ms; menu lateral e cabeçalho exibem nome e papel correto. | ✅ Aprovado |
-| **TC-MAN-04** | Bloqueio Temporal por Força Bruta | Usuário existente | 1. Digitar senha incorreta por 5 vezes consecutivas.<br>2. Tentar a 6ª vez com a senha correta. | Na 6ª tentativa o sistema deve recusar o acesso com HTTP 423 Locked e informar bloqueio por 15 minutos. | Conta bloqueada temporalmente; mensagem clara de proteção contra invasão exibida. | ✅ Aprovado |
-| **TC-MAN-05** | Alternador de Perfis em 1 Clique (Reviewer Experience) | Qualquer tela do sistema | 1. Clicar nos botões rápidos no rodapé da Sidebar: Administrador ↔ Proprietário ↔ Equipe. | A interface deve reconfigurar instantaneamente as permissões, menus visíveis e dados mostrados. | Alternância suave e imediata sem recarregar a página (SPA reativa). | ✅ Aprovado |
-| **TC-MAN-06** | Cadastro de Imóvel com Comodidades | Logado como Proprietário | 1. Acessar `/properties`.<br>2. Clicar em "Novo Imóvel".<br>3. Preencher dados do imóvel, endereço e comodidades.<br>4. Salvar. | Modal valida campos obrigatórios; imóvel salvo com status "Ativo"; card aparece imediatamente no grid. | Imóvel cadastrado com sucesso; comodidades vinculadas exibidas no card. | ✅ Aprovado |
-| **TC-MAN-07** | Edição de Imóvel Existente | Proprietário dono do imóvel | 1. Clicar no botão "Editar" do card do imóvel.<br>2. Alterar o valor da diária de R$ 450 para R$ 490.<br>3. Confirmar alteração. | As informações são atualizadas no backend e refletidas imediatamente na tela sem refresh. | Diária atualizada com sucesso no banco e na interface. | ✅ Aprovado |
-| **TC-MAN-08** | Filtros Dinâmicos de Catálogo | Catálogo com múltiplos imóveis | 1. Digitar o nome de uma cidade na barra de busca.<br>2. Selecionar o tipo "Chalé".<br>3. Definir status "Ativo". | A listagem filtra instantaneamente apenas os imóveis que satisfazem cumulativamente os critérios. | Grid atualizado com precisão conforme os parâmetros digitados. | ✅ Aprovado |
-| **TC-MAN-09** | Soft Delete de Imóvel | Imóvel ativo na lista | 1. Abrir opções do imóvel e selecionar "Excluir".<br>2. Confirmar no diálogo de alerta. | O imóvel é marcado como inativo (`deleted_at` preenchido) e desaparece da listagem do proprietário. | Imóvel removido da visualização preservando integridade fiscal. | ✅ Aprovado |
-| **TC-MAN-10** | Consulta ao Assistente de IA Operacional | Logado como Proprietário em `/ai-assistant` | 1. Enviar mensagem: *"Como está a taxa de ocupação dos meus imóveis?"* | Assistente injeta dados operacionais reais e responde em Markdown com taxas, percentuais e diagnóstico. | Resposta formatada recebida em ~200ms com títulos, listas e valores precisos. | ✅ Aprovado |
-| **TC-MAN-11** | Acionamento de Ação Sugerida (1-Click Action) | Resposta da IA com pílulas sugeridas | 1. Clicar na pílula *"Aplicar desconto meio de semana"*. | O texto da ação é enviado automaticamente como nova pergunta ao copiloto no mesmo fio de conversa. | IA processa a sugestão sem necessidade de redigitação pelo gestor. | ✅ Aprovado |
-| **TC-MAN-12** | Descarte de Insight Proativo | Aba "Alertas & Insights" | 1. Visualizar card de insight sobre estoque baixo.<br>2. Clicar no botão "Dispensar". | Card sai da lista ativa com animação suave e o insight é marcado como dispensado no banco. | Card arquivado com feedback imediato; persistência correta no backend. | ✅ Aprovado |
-| **TC-MAN-13** | Barramento de Segurança de Funcionário na IA | Logado como Funcionário (`employee`) | 1. Tentar acessar a URL `/ai-assistant` diretamente pelo navegador. | Guarda de rota (`ProtectedRoute`) e API (403) devem barrar o acesso e redirecionar para suas tarefas. | Acesso estritamente bloqueado; funcionário é redirecionado para `/tasks`. | ✅ Aprovado |
-| **TC-MAN-14** | Responsividade em Dispositivos Móveis | Navegador em viewport mobile (375x667) | 1. Reduzir a largura da janela para simular smartphone.<br>2. Verificar menu e navegação. | Sidebar oculta; Bottom Navigation Bar fixa na base com ícones de toque; modais em tela cheia adaptados. | Navegação idêntica à de app nativo mobile; elementos sem quebra horizontal. | ✅ Aprovado |
-| **TC-MAN-15** | Renovação Silenciosa de Sessão JWT | Usuário ativo com token expirando | 1. Simular expiração do `access_token`.<br>2. Disparar uma requisição de consulta de imóveis. | Interceptor do Axios detecta 401, aciona `/auth/refresh` em segundo plano e repete a chamada original. | Ação completada de forma transparente para o usuário sem exigir novo login. | ✅ Aprovado |
+| **TC-MAN-01** | Registro de Novo Proprietário com LGPD | Usuário não autenticado na tela `/login` | 1. Alternar para aba "Criar Conta".<br>2. Preencher nome, e-mail e senha forte.<br>3. Marcar checkbox de aceite dos termos LGPD.<br>4. Clicar em "Criar minha conta". | Conta criada com sucesso (201 Created), redirecionando para login ou dashboard com consentimento registrado. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-02** | Bloqueio de Registro com E-mail Duplicado | Usuário na tela de cadastro | 1. Informar e-mail já existente na base (`mariana@host.com`).<br>2. Submeter formulário. | Sistema deve barrar a criação e exibir mensagem amigável de e-mail já cadastrado (409 Conflict). | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-03** | Login com Credenciais Válidas e RBAC | Usuário cadastrado | 1. Inserir e-mail e senha cadastrados.<br>2. Submeter login. | Login autenticado com sucesso; tokens salvos no localStorage; redirecionamento para o dashboard correspondente. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-04** | Bloqueio Temporal por Força Bruta | Usuário existente | 1. Digitar senha incorreta por 5 vezes consecutivas.<br>2. Tentar a 6ª vez com a senha correta. | Na 6ª tentativa o sistema deve recusar o acesso com HTTP 423 Locked e informar bloqueio por 15 minutos. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-05** | Alternador de Perfis em 1 Clique (Reviewer Experience) | Qualquer tela do sistema | 1. Clicar nos botões rápidos no rodapé da Sidebar: Administrador ↔ Proprietário ↔ Equipe. | A interface deve reconfigurar instantaneamente as permissões, menus visíveis e dados mostrados. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-06** | Cadastro de Imóvel com Comodidades | Logado como Proprietário | 1. Acessar `/properties`.<br>2. Clicar em "Novo Imóvel".<br>3. Preencher dados do imóvel, endereço e comodidades.<br>4. Salvar. | Modal valida campos obrigatórios; imóvel salvo com status "Ativo"; card aparece imediatamente no grid. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-07** | Edição de Imóvel Existente | Proprietário dono do imóvel | 1. Clicar no botão "Editar" do card do imóvel.<br>2. Alterar o valor da diária de R$ 450 para R$ 490.<br>3. Confirmar alteração. | As informações são atualizadas no backend e refletidas imediatamente na tela sem refresh. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-08** | Filtros Dinâmicos de Catálogo | Catálogo com múltiplos imóveis | 1. Digitar o nome de uma cidade na barra de busca.<br>2. Selecionar o tipo "Chalé".<br>3. Definir status "Ativo". | A listagem filtra instantaneamente apenas os imóveis que satisfazem cumulativamente os critérios. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-09** | Soft Delete de Imóvel | Imóvel ativo na lista | 1. Abrir opções do imóvel e selecionar "Excluir".<br>2. Confirmar no diálogo de alerta. | O imóvel é marcado como inativo (`deleted_at` preenchido) e desaparece da listagem do proprietário. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-10** | Consulta ao Assistente de IA Operacional | Logado como Proprietário em `/ai-assistant` | 1. Enviar mensagem: *"Como está a taxa de ocupação dos meus imóveis?"* | Assistente injeta dados operacionais reais e responde em Markdown com taxas, percentuais e diagnóstico. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-11** | Acionamento de Ação Sugerida (1-Click Action) | Resposta da IA com pílulas sugeridas | 1. Clicar na pílula *"Aplicar desconto meio de semana"*. | O texto da ação é enviado automaticamente como nova pergunta ao copiloto no mesmo fio de conversa. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-12** | Descarte de Insight Proativo | Aba "Alertas & Insights" | 1. Visualizar card de insight sobre estoque baixo.<br>2. Clicar no botão "Dispensar". | Card sai da lista ativa com animação suave e o insight é marcado como dispensado no banco. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-13** | Barramento de Segurança de Funcionário na IA | Logado como Funcionário (`employee`) | 1. Tentar acessar a URL `/ai-assistant` diretamente pelo navegador. | Guarda de rota (`ProtectedRoute`) e API (403) devem barrar o acesso e redirecionar para suas tarefas. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-14** | Responsividade em Dispositivos Móveis | Navegador em viewport mobile (375x667) | 1. Reduzir a largura da janela para simular smartphone.<br>2. Verificar menu e navegação. | Sidebar oculta; Bottom Navigation Bar fixa na base com ícones de toque; modais em tela cheia adaptados. | _a preencher na execução_ | ⏳ Pendente |
+| **TC-MAN-15** | Renovação Silenciosa de Sessão JWT | Usuário ativo com token expirando | 1. Simular expiração do `access_token`.<br>2. Disparar uma requisição de consulta de imóveis. | Interceptor do Axios detecta 401, aciona `/auth/refresh` em segundo plano e repete a chamada original. | _a preencher na execução_ | ⏳ Pendente |
 
 ---
 
@@ -256,7 +259,7 @@ Durante o processo de testes automatizados e manuais, foram identificados **6 de
 
 ## 6. Matriz de Rastreabilidade de Requisitos (RTM)
 
-A tabela abaixo comprova a cobertura completa dos requisitos do projeto através dos testes automatizados e manuais executados:
+A tabela abaixo comprova a cobertura completa dos requisitos do projeto através dos testes automatizados executados e dos casos manuais planejados (pendentes de execução):
 
 | Requisito | Descrição | Teste Automatizado | Teste Manual |
 |---|---|---|---|
@@ -276,8 +279,8 @@ A tabela abaixo comprova a cobertura completa dos requisitos do projeto através
 
 A execução da **Etapa 5** comprovou a maturidade, robustez e segurança do **Sistema de Gestão Inteligente para Locação por Temporada**:
 
-1. **Cobertura Completa:** 36 testes automatizados (18 backend e 18 frontend) e 15 testes manuais cobrindo todas as camadas da aplicação;
+1. **Cobertura Completa:** 36 testes automatizados (18 backend e 18 frontend) e 15 casos manuais planejados (execução pendente);
 2. **Segurança Reforçada:** As falhas críticas de autorização (IDOR e injeção de mensagens) foram sanadas na raiz da arquitetura DDD;
-3. **Desempenho Comprovado:** Latência sob concorrência inferior a 100ms e execução da suíte completa em tempo recorde;
-4. **Pronto para Homologação:** O sistema atende integralmente a todos os requisitos funcionais e não funcionais estabelecidos.
+3. **Concorrência:** lotes de 30 e 15 requisições simultâneas concluem sem falhas no ambiente de teste (SQLite em memória); desempenho em PostgreSQL ainda não foi medido;
+4. **Situação:** os fluxos cobertos pelos testes automatizados passam. O sistema ainda não está pronto para produção; o plano de adequação está em `fase1_auditoria`/Fases 2 a 5.
 

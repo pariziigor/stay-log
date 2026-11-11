@@ -1,6 +1,10 @@
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Valor usado apenas em desenvolvimento/testes. Nunca aceito em produção.
+INSECURE_DEFAULT_SECRET_KEY = "default-insecure-secret-key-change-in-production-min-32-chars"
+LOCAL_ENVIRONMENTS = {"development", "test"}
 
 
 class Settings(BaseSettings):
@@ -16,7 +20,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # JWT Security
-    SECRET_KEY: str = "default-insecure-secret-key-change-in-production-min-32-chars"
+    SECRET_KEY: str = INSECURE_DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -43,6 +47,20 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return []
+
+    @model_validator(mode="after")
+    def enforce_production_safety(self) -> "Settings":
+        """Impede subir fora de dev/test com segredo fraco ou banco de desenvolvimento."""
+        if self.ENVIRONMENT.lower() in LOCAL_ENVIRONMENTS:
+            return self
+        if self.SECRET_KEY == INSECURE_DEFAULT_SECRET_KEY or len(self.SECRET_KEY) < 32:
+            raise ValueError(
+                "SECRET_KEY insegura: defina uma chave aleatória com pelo menos 32 caracteres "
+                "(ex.: python -c \"import secrets; print(secrets.token_urlsafe(48))\")."
+            )
+        if self.DATABASE_URL.startswith("sqlite"):
+            raise ValueError("DATABASE_URL com SQLite não é permitido fora de desenvolvimento/teste. Use PostgreSQL.")
+        return self
 
 
 settings = Settings()
