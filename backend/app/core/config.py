@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./locacao_dev.db"
 
+    # AI Assistant Providers (Gratuitos: Google AI Studio Gemini ou Groq Llama 3.3)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
     # CORS (aceita lista JSON ou string separada por vírgulas no Render)
     BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5173",

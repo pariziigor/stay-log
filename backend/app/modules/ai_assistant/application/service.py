@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
+import json
+import logging
+import time
 from typing import Any, Dict, List, Optional
 import uuid
+import httpx
+from app.core.config import settings
 from app.core.exceptions import EntityNotFoundError, ForbiddenError
 from app.modules.ai_assistant.application.context_builder import OperationalContextBuilder
 from app.modules.ai_assistant.application.dtos import (
@@ -14,12 +19,15 @@ from app.modules.ai_assistant.domain.entities import (
     AIInsight,
     AIMessage,
 )
+from app.modules.ai_assistant.domain.prompts import SYSTEM_PROMPT_PROPERTY_OPERATIONS
 from app.modules.ai_assistant.domain.repository import AIAssistantRepository
 from app.modules.ai_assistant.domain.value_objects import (
     InsightSeverity,
     InsightType,
     MessageRole,
 )
+
+logger = logging.getLogger("locacao_temporada")
 
 
 class AIAssistantService:
@@ -73,16 +81,27 @@ class AIAssistantService:
             property_id=dto.property_id,
         )
 
-        # 4. Motor de Raciocínio Operacional com Context Injection
-        assistant_content, suggested_actions = self._generate_grounded_response(dto.content, context)
+        # 4. Motor de Raciocínio Operacional: usa LLM gratuito (Gemini / Groq) se configurado,
+        #    com fallback automático para o motor analítico local.
+        history = await self._ai_repo.list_messages(conversation.id)
+        (
+            assistant_content,
+            suggested_actions,
+            model_used,
+            latency_ms,
+            prompt_tokens,
+            completion_tokens,
+        ) = await self._generate_ai_response(dto.content, context, history)
 
         # 5. Persiste mensagem do assistente
         assistant_message = AIMessage(
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             content=assistant_content,
-            model="copiloto-operacional-grounded",
-            latency_ms=45,
+            model=model_used,
+            latency_ms=latency_ms,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
         saved_assistant_message = await self._ai_repo.save_message(assistant_message)
 
@@ -99,6 +118,123 @@ class AIAssistantService:
             metrics_snapshot=context.get("occupancy"),
             created_at=saved_assistant_message.created_at,
         )
+
+    async def _generate_ai_response(
+        self,
+        user_query: str,
+        context: Dict[str, Any],
+        history: List[AIMessage],
+    ) -> tuple[str, List[str], str, int, Optional[int], Optional[int]]:
+        """Tenta gerar resposta via Google Gemini ou Groq (ambos com plano gratuito) injetando o contexto real do banco."""
+        fallback_content, suggested_actions = self._generate_grounded_response(user_query, context)
+
+        system_instruction = (
+            f"{SYSTEM_PROMPT_PROPERTY_OPERATIONS}\n\n"
+            "=========================\n"
+            "CONTEXTO OPERACIONAL EM TEMPO REAL DO BANCO DE DADOS (JSON):\n"
+            "=========================\n"
+            f"{json.dumps(context, ensure_ascii=False, indent=2)}\n\n"
+            "Responda em Português do Brasil (pt-BR) de forma prática, clara e formatada em Markdown, "
+            "utilizando os números reais do contexto acima."
+        )
+
+        recent_messages = history[-10:] if history else []
+
+        # 1. Tenta Google Gemini (Google AI Studio - Free Tier)
+        gemini_key = settings.GEMINI_API_KEY.strip()
+        if gemini_key:
+            start_ts = time.perf_counter()
+            try:
+                gemini_contents = []
+                for msg in recent_messages:
+                    role_str = "user" if msg.role == MessageRole.USER else "model"
+                    gemini_contents.append({"role": role_str, "parts": [{"text": msg.content}]})
+                if not gemini_contents or gemini_contents[-1]["role"] != "user":
+                    gemini_contents.append({"role": "user", "parts": [{"text": user_query}]})
+
+                model_name = settings.GEMINI_MODEL.strip() or "gemini-2.5-flash"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                payload = {
+                    "system_instruction": {"parts": [{"text": system_instruction}]},
+                    "contents": gemini_contents,
+                    "generationConfig": {
+                        "temperature": 0.4,
+                        "maxOutputTokens": 1200,
+                    },
+                }
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    resp = await client.post(url, params={"key": gemini_key}, json=payload)
+                    if resp.status_code == 404 and model_name != "gemini-2.0-flash":
+                        model_name = "gemini-2.0-flash"
+                        url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                        resp = await client.post(url_fallback, params={"key": gemini_key}, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                candidates = data.get("candidates") or []
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts") or []
+                    text = "".join(p.get("text", "") for p in parts).strip()
+                    if text:
+                        latency_ms = int((time.perf_counter() - start_ts) * 1000)
+                        usage = data.get("usageMetadata") or {}
+                        return (
+                            text,
+                            suggested_actions,
+                            model_name,
+                            latency_ms,
+                            usage.get("promptTokenCount"),
+                            usage.get("candidatesTokenCount"),
+                        )
+            except Exception as exc:
+                logger.warning("Falha ao consultar Gemini API (%s). Usando motor operacional local.", exc)
+
+        # 2. Tenta Groq API (Llama 3.3 70B - Free Tier)
+        groq_key = settings.GROQ_API_KEY.strip()
+        if groq_key:
+            start_ts = time.perf_counter()
+            try:
+                groq_messages = [{"role": "system", "content": system_instruction}]
+                for msg in recent_messages:
+                    role_str = "user" if msg.role == MessageRole.USER else "assistant"
+                    groq_messages.append({"role": role_str, "content": msg.content})
+                if len(groq_messages) == 1 or groq_messages[-1]["role"] != "user":
+                    groq_messages.append({"role": "user", "content": user_query})
+
+                model_name = settings.GROQ_MODEL.strip() or "llama-3.3-70b-versatile"
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {groq_key}"},
+                        json={
+                            "model": model_name,
+                            "messages": groq_messages,
+                            "temperature": 0.4,
+                            "max_tokens": 1200,
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                choices = data.get("choices") or []
+                if choices:
+                    text = (choices[0].get("message", {}).get("content") or "").strip()
+                    if text:
+                        latency_ms = int((time.perf_counter() - start_ts) * 1000)
+                        usage = data.get("usage") or {}
+                        return (
+                            text,
+                            suggested_actions,
+                            model_name,
+                            latency_ms,
+                            usage.get("prompt_tokens"),
+                            usage.get("completion_tokens"),
+                        )
+            except Exception as exc:
+                logger.warning("Falha ao consultar Groq API (%s). Usando motor operacional local.", exc)
+
+        # 3. Fallback determinístico embasado nos dados do banco
+        return fallback_content, suggested_actions, "copiloto-operacional-grounded", 45, None, None
 
     def _generate_grounded_response(self, user_query: str, context: Dict[str, Any]) -> tuple[str, List[str]]:
         """Gera resposta embasada exclusivamente nos dados reais agregados do banco de dados."""
