@@ -28,6 +28,8 @@ export const PropertiesPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [viewingProperty, setViewingProperty] = useState<Property | null>(null);
+  const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Descarta respostas de requisições antigas quando os filtros mudam rapidamente.
   const latestRequest = useRef(0);
@@ -79,15 +81,22 @@ export const PropertiesPage: React.FC = () => {
     await loadProperties();
   };
 
-  const handleDeleteProperty = async (property: Property) => {
-    if (!window.confirm(`Deseja realmente desativar o imóvel "${property.name}"?`)) return;
+  const handleDeleteProperty = (property: Property) => {
+    setPropertyToDelete(property);
+  };
 
+  const confirmDeleteProperty = async () => {
+    if (!propertyToDelete) return;
+    setIsDeleting(true);
     try {
-      await propertyService.deleteProperty(property.id);
-      setNotice({ type: 'success', text: `Imóvel "${property.name}" desativado.` });
+      await propertyService.deleteProperty(propertyToDelete.id);
+      setNotice({ type: 'success', text: `Imóvel "${propertyToDelete.name}" desativado.` });
+      setPropertyToDelete(null);
       await loadProperties();
     } catch (err) {
       setNotice({ type: 'error', text: getApiErrorMessage(err, 'Não foi possível desativar o imóvel.') });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -237,6 +246,52 @@ export const PropertiesPage: React.FC = () => {
           setIsModalOpen(true);
         }}
       />
+
+      {/* Modal Acessível de Confirmação de Desativação */}
+      {propertyToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-property-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 id="delete-property-title" className="text-base font-extrabold text-slate-900">
+                  Desativar Imóvel
+                </h3>
+                <p className="text-xs text-slate-500">
+                  O histórico de reservas e financeiro será preservado (soft delete).
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Deseja realmente desativar o imóvel <strong>{propertyToDelete.name}</strong>?
+            </p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setPropertyToDelete(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                isLoading={isDeleting}
+                onClick={confirmDeleteProperty}
+              >
+                Confirmar Desativação
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

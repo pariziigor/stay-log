@@ -33,6 +33,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       return [
         { label: 'Minhas Tarefas', path: '/tasks', icon: CheckSquare, badge: 'Hoje' },
         { label: 'Imóveis Vinculados', path: '/properties', icon: Building2 },
+        { label: 'Controle de Estoque', path: '/inventory', icon: PackageOpen },
+        { label: 'Configurações', path: '/settings', icon: Settings },
       ];
     }
 
@@ -42,6 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         { label: 'Todos os Imóveis', path: '/properties', icon: Building2 },
         { label: 'Reservas Globais', path: '/bookings', icon: CalendarDays },
         { label: 'Operações & Equipe', path: '/tasks', icon: CheckSquare },
+        { label: 'Controle de Estoque', path: '/inventory', icon: PackageOpen },
+        { label: 'Financeiro', path: '/finance', icon: DollarSign },
         { label: 'Assistente IA', path: '/ai-assistant', icon: Bot, badge: 'IA' },
         { label: 'Gestão de Usuários', path: '/users', icon: Users, badge: 'Admin' },
         { label: 'Configurações', path: '/settings', icon: Settings },
@@ -53,10 +57,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
       { label: 'Visão Geral', path: '/dashboard', icon: LayoutDashboard },
       { label: 'Meus Imóveis', path: '/properties', icon: Building2 },
       { label: 'Calendário & Reservas', path: '/bookings', icon: CalendarDays },
-      { label: 'Tarefas & Equipe', path: '/tasks', icon: CheckSquare },
+      { label: 'Tarefas & Checklists', path: '/tasks', icon: CheckSquare },
       { label: 'Controle de Estoque', path: '/inventory', icon: PackageOpen },
       { label: 'Financeiro', path: '/finance', icon: DollarSign },
-      { label: 'Assistente IA', path: '/ai-assistant', icon: Bot, badge: 'Novo' },
+      { label: 'Minha Equipe', path: '/users', icon: Users },
+      { label: 'Assistente IA', path: '/ai-assistant', icon: Bot, badge: 'IA' },
+      { label: 'Configurações', path: '/settings', icon: Settings },
     ];
   };
 

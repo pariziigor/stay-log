@@ -34,6 +34,7 @@ export const AIAssistantPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   // Tab para visualização em telas pequenas ('chat' ou 'insights')
   const [mobileTab, setMobileTab] = useState<'chat' | 'insights'>('chat');
@@ -60,8 +61,8 @@ export const AIAssistantPage: React.FC = () => {
       if (convsData.length > 0 && !currentConversationId) {
         selectConversation(convsData[0].id);
       }
-    } catch (err) {
-      console.error('Erro ao carregar dados do assistente:', err);
+    } catch {
+      setErrorNotice('Não foi possível sincronizar todos os dados do assistente.');
     } finally {
       setIsInsightsLoading(false);
     }
@@ -74,8 +75,8 @@ export const AIAssistantPage: React.FC = () => {
       const history = await aiService.getConversationMessages(convId);
       setMessages(history);
       setMobileTab('chat');
-    } catch (err) {
-      console.error('Erro ao carregar mensagens da conversa:', err);
+    } catch {
+      setErrorNotice('Não foi possível carregar o histórico desta conversa.');
     } finally {
       setIsLoading(false);
     }
@@ -116,8 +117,7 @@ export const AIAssistantPage: React.FC = () => {
       }
 
       setMessages((prev) => [...prev, response]);
-    } catch (err) {
-      console.error('Erro ao enviar mensagem para IA:', err);
+    } catch {
       // Mensagem de erro amigável se falhar
       const errorMsg: ChatMessageResponse = {
         id: `err-${Date.now()}`,
@@ -139,8 +139,8 @@ export const AIAssistantPage: React.FC = () => {
     try {
       await aiService.dismissInsight(id);
       setInsights((prev) => prev.filter((item) => item.id !== id));
-    } catch (err) {
-      console.error('Erro ao dispensar insight:', err);
+    } catch {
+      setErrorNotice('Não foi possível dispensar o alerta selecionado.');
     } finally {
       setDismissingId(null);
     }
@@ -157,6 +157,17 @@ export const AIAssistantPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Page Header */}
+      {errorNotice && (
+        <div
+          role="alert"
+          className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center justify-between"
+        >
+          <span>{errorNotice}</span>
+          <button type="button" onClick={() => setErrorNotice(null)} className="font-bold underline">
+            Fechar
+          </button>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

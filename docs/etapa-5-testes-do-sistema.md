@@ -1,8 +1,8 @@
 # Etapa 5 — Testes do Sistema ao Todo (Garantia da Qualidade & Testes de Software)
 
-> **Status:** 36 testes automatizados aprovados. Os 15 casos de teste manuais estão **roteirizados, mas ainda não foram executados** (ver errata abaixo).  
+> **Status:** 54 testes automatizados aprovados (31 Backend Pytest + 23 Frontend Vitest). Os 15 casos de teste manuais estão **roteirizados, mas ainda não foram executados** (ver errata abaixo).  
 > **Suítes Automatizadas:** Pytest 9.1 (Python / FastAPI) · Vitest 5.0 (React 18 / TypeScript).  
-> **Data da etapa:** Outubro de 2026 (errata aplicada em novembro de 2026).
+> **Data da etapa:** Outubro de 2026 (atualizado em novembro de 2026 com cobertura completa de Tarefas/RF-11, Reservas/Overbooking/LGPD, Estoque/RF-12, Financeiro/RF-13, Equipe, Dashboard e Grounding Real de IA).
 
 > [!WARNING]
 > **Errata (novembro de 2026).** A versão original deste documento registrou os 15 casos manuais como "Aprovado" com "Resultado Obtido", mas **esses testes manuais não haviam sido executados**; os resultados descreviam o comportamento esperado. Além disso, o texto citava latência "< 100 ms" que os testes não medem, e navegadores específicos que não foram usados. Esses trechos foram corrigidos: a coluna de status dos casos manuais agora é **Pendente** e deve ser preenchida somente após a execução real. Conforme a auditoria, dois desses casos (TC-MAN-02 e TC-MAN-04) teriam falhado na versão anterior do sistema porque o frontend autenticava em modo demo quando a API retornava erro; isso foi corrigido na Fase 2 (P0).
