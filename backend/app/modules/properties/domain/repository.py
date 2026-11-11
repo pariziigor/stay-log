@@ -32,6 +32,7 @@ class PropertyRepository(BaseRepository[Property]):
         min_guests: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
+        owner_ids: Optional[Set[uuid.UUID]] = None,
     ) -> List[Property]:
         raise NotImplementedError
 
@@ -44,7 +45,13 @@ class PropertyRepository(BaseRepository[Property]):
         city: Optional[str] = None,
         state: Optional[str] = None,
         min_guests: Optional[int] = None,
+        owner_ids: Optional[Set[uuid.UUID]] = None,
     ) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_owner_ids_for_employee(self, employee_id: uuid.UUID) -> Set[uuid.UUID]:
+        """Proprietários cujas equipes ativas incluem o funcionário informado."""
         raise NotImplementedError
 
     # Comodidades

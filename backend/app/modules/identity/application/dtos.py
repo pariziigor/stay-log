@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 import uuid
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.modules.identity.domain.value_objects import ConsentType, UserRole
 
 
@@ -9,9 +9,20 @@ class UserRegisterDTO(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=150, description="Nome completo do usuário")
     email: EmailStr = Field(..., description="E-mail corporativo ou pessoal")
     password: str = Field(..., min_length=8, max_length=100, description="Senha forte (mínimo 8 caracteres)")
-    role: UserRole = Field(default=UserRole.OWNER, description="Perfil de acesso (admin, owner, employee)")
+    role: UserRole = Field(
+        default=UserRole.OWNER,
+        description="Autocadastro público só é permitido para 'owner'. Funcionários entram por convite e administradores são criados via CLI.",
+    )
     phone: Optional[str] = Field(None, max_length=20, description="Telefone de contato")
     consent_terms: bool = Field(True, description="Consentimento com termos de uso e política de privacidade (LGPD)")
+
+    @field_validator("role")
+    @classmethod
+    def only_owner_can_self_register(cls, value: UserRole) -> UserRole:
+        # Evita escalonamento de privilégio: o papel nunca é decidido pelo cliente.
+        if value != UserRole.OWNER:
+            raise ValueError("Autocadastro permitido apenas para o perfil 'owner'.")
+        return value
 
 
 class UserLoginDTO(BaseModel):

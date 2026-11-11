@@ -124,9 +124,14 @@ class PropertyService:
         if prop is None:
             raise PropertyNotFoundError(str(property_id))
 
-        # RBAC: Proprietário só visualiza seus imóveis; Admin visualiza qualquer um
+        # RBAC: Proprietário só visualiza seus imóveis; Admin visualiza qualquer um;
+        # Funcionário só visualiza imóveis de proprietários aos quais está vinculado.
         if current_user.role == UserRole.OWNER and prop.owner_id != current_user.id:
             raise UnauthorizedPropertyAccessError()
+        if current_user.role == UserRole.EMPLOYEE:
+            allowed_owners = await self._property_repo.list_owner_ids_for_employee(current_user.id)
+            if prop.owner_id not in allowed_owners:
+                raise UnauthorizedPropertyAccessError()
 
         return await self._build_response_dto(prop)
 
@@ -146,13 +151,17 @@ class PropertyService:
         limit = page_size
 
         # Tenant isolation: Proprietários só têm acesso aos seus próprios imóveis
+        allowed_owner_ids = None
         if current_user.role == UserRole.OWNER:
             effective_owner_id = current_user.id
         elif current_user.role == UserRole.ADMIN:
             effective_owner_id = owner_id_filter
         else:
-            # Funcionários: visualização restrita (em módulos futuros integrada à escala de tarefas)
+            # Funcionários: apenas imóveis dos proprietários cujas equipes integram.
             effective_owner_id = owner_id_filter
+            allowed_owner_ids = await self._property_repo.list_owner_ids_for_employee(current_user.id)
+            if not allowed_owner_ids:
+                return PropertyListResponseDTO(total=0, page=page, page_size=page_size, items=[])
 
         items = await self._property_repo.list_properties(
             owner_id=effective_owner_id,
@@ -163,6 +172,7 @@ class PropertyService:
             min_guests=min_guests,
             skip=skip,
             limit=limit,
+            owner_ids=allowed_owner_ids,
         )
         total = await self._property_repo.count_properties(
             owner_id=effective_owner_id,
@@ -171,6 +181,7 @@ class PropertyService:
             city=city,
             state=state,
             min_guests=min_guests,
+            owner_ids=allowed_owner_ids,
         )
 
         dtos = [await self._build_response_dto(p) for p in items]

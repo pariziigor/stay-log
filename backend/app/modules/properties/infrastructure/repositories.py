@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from app.modules.identity.infrastructure.models import TeamMemberModel
 from app.modules.properties.domain.entities import Amenity, Property
 from app.modules.properties.domain.repository import PropertyRepository
 from app.modules.properties.domain.value_objects import (
@@ -123,6 +124,9 @@ class SQLAlchemyPropertyRepository(PropertyRepository):
                 created_at=property_entity.created_at,
                 updated_at=property_entity.updated_at,
                 deleted_at=property_entity.deleted_at,
+                # Coleção explícita: sem isso, imóvel sem comodidades dispara lazy-load
+                # (I/O fora do greenlet) e falha com MissingGreenlet / HTTP 500.
+                property_amenities=[],
             )
             self._session.add(model)
         else:
@@ -186,10 +190,14 @@ class SQLAlchemyPropertyRepository(PropertyRepository):
         city: Optional[str] = None,
         state: Optional[str] = None,
         min_guests: Optional[int] = None,
+        owner_ids: Optional[Set[uuid.UUID]] = None,
     ):
         stmt = stmt.where(PropertyModel.deleted_at.is_(None))
         if owner_id:
             stmt = stmt.where(PropertyModel.owner_id == owner_id)
+        if owner_ids is not None:
+            # `is not None` é deliberado: conjunto vazio significa "nenhum imóvel", nunca "sem filtro".
+            stmt = stmt.where(PropertyModel.owner_id.in_(owner_ids))
         if status:
             stmt = stmt.where(PropertyModel.status == status.value)
         if property_type:
@@ -212,9 +220,10 @@ class SQLAlchemyPropertyRepository(PropertyRepository):
         min_guests: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
+        owner_ids: Optional[Set[uuid.UUID]] = None,
     ) -> List[Property]:
         stmt = select(PropertyModel).options(selectinload(PropertyModel.property_amenities))
-        stmt = self._apply_filters(stmt, owner_id, status, property_type, city, state, min_guests)
+        stmt = self._apply_filters(stmt, owner_id, status, property_type, city, state, min_guests, owner_ids)
         stmt = stmt.offset(skip).limit(limit).order_by(PropertyModel.created_at.desc())
 
         result = await self._session.execute(stmt)
@@ -228,11 +237,20 @@ class SQLAlchemyPropertyRepository(PropertyRepository):
         city: Optional[str] = None,
         state: Optional[str] = None,
         min_guests: Optional[int] = None,
+        owner_ids: Optional[Set[uuid.UUID]] = None,
     ) -> int:
         stmt = select(func.count(PropertyModel.id))
-        stmt = self._apply_filters(stmt, owner_id, status, property_type, city, state, min_guests)
+        stmt = self._apply_filters(stmt, owner_id, status, property_type, city, state, min_guests, owner_ids)
         result = await self._session.execute(stmt)
         return result.scalar_one() or 0
+
+    async def list_owner_ids_for_employee(self, employee_id: uuid.UUID) -> Set[uuid.UUID]:
+        stmt = select(TeamMemberModel.owner_id).where(
+            TeamMemberModel.employee_id == employee_id,
+            TeamMemberModel.is_active.is_(True),
+        )
+        result = await self._session.execute(stmt)
+        return set(result.scalars().all())
 
     async def list_amenities(self) -> List[Amenity]:
         stmt = select(AmenityModel).order_by(AmenityModel.category, AmenityModel.name)
