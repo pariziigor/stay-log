@@ -190,7 +190,7 @@ export const AIAssistantPage: React.FC = () => {
             <select
               value={selectedPropertyId}
               onChange={(e) => setSelectedPropertyId(e.target.value)}
-              className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 pr-8 font-medium text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20"
+              className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 pr-8 font-medium text-slate-700 shadow-2xs hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
             >
               <option value="">Todos os Imóveis (Visão Geral)</option>
               {properties.map((prop) => (

@@ -7,6 +7,17 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      spacing: {
+        '4.5': '1.125rem',
+        '18': '4.5rem',
+      },
+      borderRadius: {
+        'xs': '0.25rem',
+      },
+      scale: {
+        '98': '0.98',
+        '102': '1.02',
+      },
       colors: {
         brand: {
           50: '#eef2ff',
@@ -58,6 +69,8 @@ export default {
         },
       },
       boxShadow: {
+        '2xs': '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+        'xs': '0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.06)',
         'glow': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
         'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
         'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',

@@ -91,19 +91,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
         )}
       >
         {/* Brand Header */}
-        <div className="h-18 flex items-center justify-between px-6 border-b border-slate-100">
+        <div className="h-18 shrink-0 flex items-center justify-between px-6 border-b border-slate-200/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/25">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/25 shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
-            <div>
-              <span className="text-base font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5">
-                Hospeda<span className="text-brand-600">AI</span>
-                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-brand-100 text-brand-700">
+            <div className="leading-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-extrabold tracking-tight text-slate-900">
+                  Hospeda<span className="text-brand-600">AI</span>
+                </span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] leading-none font-bold bg-brand-100 text-brand-700 border border-brand-200/60">
                   PRO
                 </span>
-              </span>
-              <p className="text-[11px] text-slate-400 font-medium">Temporada Inteligente</p>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Temporada Inteligente</p>
             </div>
           </div>
         </div>
