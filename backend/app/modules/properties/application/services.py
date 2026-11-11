@@ -32,8 +32,15 @@ class PropertyService:
     def __init__(self, property_repo: PropertyRepository):
         self._property_repo = property_repo
 
-    async def _build_response_dto(self, property_entity: Property) -> PropertyResponseDTO:
-        amenities = await self._property_repo.get_amenities_by_ids(property_entity.amenity_ids)
+    async def _build_response_dto(
+        self,
+        property_entity: Property,
+        preloaded_amenities: Optional[List[Amenity]] = None,
+    ) -> PropertyResponseDTO:
+        if preloaded_amenities is not None:
+            amenities = preloaded_amenities
+        else:
+            amenities = await self._property_repo.get_amenities_by_ids(property_entity.amenity_ids)
         amenity_dtos = [
             AmenityResponseDTO(
                 id=a.id,
@@ -184,7 +191,17 @@ class PropertyService:
             owner_ids=allowed_owner_ids,
         )
 
-        dtos = [await self._build_response_dto(p) for p in items]
+        all_amenity_ids: Set[int] = {aid for p in items for aid in p.amenity_ids}
+        all_amenities = await self._property_repo.get_amenities_by_ids(all_amenity_ids)
+        amenities_by_id = {a.id: a for a in all_amenities}
+
+        dtos = [
+            await self._build_response_dto(
+                p,
+                preloaded_amenities=[amenities_by_id[aid] for aid in sorted(p.amenity_ids) if aid in amenities_by_id],
+            )
+            for p in items
+        ]
         return PropertyListResponseDTO(
             total=total,
             page=page,

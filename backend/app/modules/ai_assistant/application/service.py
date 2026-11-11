@@ -14,7 +14,6 @@ from app.modules.ai_assistant.domain.entities import (
     AIInsight,
     AIMessage,
 )
-from app.modules.ai_assistant.domain.prompts import SYSTEM_PROMPT_PROPERTY_OPERATIONS
 from app.modules.ai_assistant.domain.repository import AIAssistantRepository
 from app.modules.ai_assistant.domain.value_objects import (
     InsightSeverity,
@@ -82,12 +81,11 @@ class AIAssistantService:
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             content=assistant_content,
-            model="gemini-2.5-pro-grounded",
-            latency_ms=180,
+            model="copiloto-operacional-grounded",
+            latency_ms=45,
         )
         saved_assistant_message = await self._ai_repo.save_message(assistant_message)
 
-        # Atualiza título inteligente se necessário
         if conversation.title == "Nova Consulta" or len(conversation.title) <= 15:
             conversation.update_title(dto.content[:45])
             await self._ai_repo.save(conversation)
@@ -103,106 +101,172 @@ class AIAssistantService:
         )
 
     def _generate_grounded_response(self, user_query: str, context: Dict[str, Any]) -> tuple[str, List[str]]:
-        """Gera resposta embasada nos dados reais agregados do banco de dados."""
+        """Gera resposta embasada exclusivamente nos dados reais agregados do banco de dados."""
         query_lower = user_query.lower()
         props = context.get("properties", [])
         occupancy = context.get("occupancy", {})
         inventory = context.get("inventory_alerts", [])
         financial = context.get("financial", {})
+        operations = context.get("operations", {})
+
+        first_prop_name = props[0]["name"] if props else "seu portfólio"
 
         # Intenção 1: Ocupação e Calendário
         if any(w in query_lower for w in ["ocupação", "ocupacao", "reservas", "vazio", "calendário", "calendario"]):
+            cur_occ = occupancy.get("current_month_occupancy_pct", 0.0)
+            next_occ = occupancy.get("next_month_projected_pct", 0.0)
+            active_res = occupancy.get("total_active_reservations", 0)
+            checkins = occupancy.get("upcoming_check_ins_today", 0)
+            checkouts = occupancy.get("upcoming_check_outs_today", 0)
+
             content = f"""
 ### 📊 Análise da Taxa de Ocupação & Reservas
 
-Com base nos registros consolidados das suas propriedades:
+Com base nos registros consolidados das suas propriedades ({len(props)} imóvel(is) cadastrado(s)):
 
-- **Ocupação no Mês Corrente:** **{occupancy.get('current_month_occupancy_pct')}%** (Desempenho excelente, acima da média regional de 68%).
-- **Previsão para o Próximo Mês:** **{occupancy.get('next_month_projected_pct')}%** (Existem janelas vagas importantes nos dias úteis).
-- **Reservas Ativas Confirmadas:** **{occupancy.get('total_active_reservations')} estadias**.
-- **Movimentação Prevista para Hoje:** {occupancy.get('upcoming_check_ins_today')} check-ins e {occupancy.get('upcoming_check_outs_today')} check-outs.
+- **Ocupação no Mês Corrente:** **{cur_occ}%**
+- **Previsão para o Próximo Mês:** **{next_occ}%**
+- **Reservas Ativas Confirmadas:** **{active_res} estadia(s)**
+- **Movimentação Prevista para Hoje:** {checkins} check-in(s) e {checkouts} check-out(s).
 
 #### 💡 Recomendações Estratégicas:
-1. **Promoção de Meio de Semana:** Configure um desconto progressivo de 10% para estadias de 3+ noites entre terça e quinta-feira.
-2. **Pacote de Feriado:** O feriado do próximo mês ainda possui vagas no **Chalé da Montanha**. Sugiro abrir estadia mínima de 3 noites para maximizar a receita por reserva.
+1. **Promoção de Meio de Semana:** Configure um desconto progressivo de 10% para estadias de 3+ noites entre terça e quinta-feira em **{first_prop_name}**.
+2. **Gestão de Janelas Vagas:** Revise os bloqueios de calendário e antecipe campanhas para datas com ocupação projetada abaixo de 50%.
 """.strip()
-            actions = ["Aplicar desconto meio de semana", "Abrir calendário de feriados", "Verificar check-ins de hoje"]
+            actions = ["Ver calendário de reservas", "Registrar nova reserva", "Verificar check-ins de hoje"]
             return content, actions
 
         # Intenção 2: Suprimentos / Estoque
         if any(w in query_lower for w in ["estoque", "suprimento", "material", "acabando", "falta", "comprar"]):
-            items_str = "\n".join(
-                [f"- ⚠️ **{item['item_name']}** ({item['property_name']}): saldo atual de **{item['current_quantity']} {item['unit']}** (mínimo exigido: {item['minimum_quantity']}). Ruptura iminente de {item['shortage']} unidades." for item in inventory]
-            )
-            content = f"""
+            if inventory:
+                items_str = "\n".join(
+                    [
+                        f"- ⚠️ **{item['item_name']}** ({item['property_name']}): saldo atual de **{item['current_quantity']} {item['unit']}** (mínimo exigido: {item['minimum_quantity']}). Déficit de {item['shortage']} {item['unit']}."
+                        for item in inventory
+                    ]
+                )
+                content = f"""
 ### 📦 Diagnóstico de Suprimentos & Alertas de Ruptura
 
-Identifiquei **{len(inventory)} itens abaixo do estoque mínimo** configurado na plataforma:
+Identifiquei **{len(inventory)} item(ns) com estoque crítico** na plataforma:
 
 {items_str}
 
 #### 🛠️ Ação Imediata Recomendada:
-Para evitar que hóspedes cheguem e encontrem falta de itens essenciais:
-1. Solicite à equipe a reposição de **papel higiênico** no *Studio Beira-Mar* antes do check-in das 15h.
-2. Crie uma tarefa de compra no módulo de estoque para **cápsulas de café**.
+1. Registre uma entrada de reposição no módulo de **Estoque & Suprimentos** para regularizar o saldo antes do próximo check-in.
+2. Crie uma tarefa operacional de reposição atribuída à equipe de campo.
+""".strip()
+            else:
+                content = f"""
+### 📦 Diagnóstico de Suprimentos & Alertas de Ruptura
+
+Nenhum item está abaixo do estoque mínimo configurado no momento ({len(props)} imóvel(is) monitorado(s)).
+
+#### 🛠️ Boas Práticas:
+1. Mantenha o registro de saídas atualizado a cada limpeza pós-checkout.
+2. Cadastre limites mínimos de segurança para itens de alta rotatividade (higiene, limpeza e enxoval).
 """.strip()
             actions = ["Registrar entrada no estoque", "Atribuir tarefa de compra à equipe", "Ver todos os suprimentos"]
             return content, actions
 
         # Intenção 3: Finanças e Faturamento
         if any(w in query_lower for w in ["faturamento", "receita", "lucro", "financeiro", "dinheiro", "margem"]):
-            content = f"""
-### 💰 Visão Financeira & Margem Líquida ({financial.get('period')})
+            gross = float(financial.get("gross_revenue", 0.0))
+            fees = float(financial.get("platform_fees_deducted", 0.0))
+            clean_exp = float(financial.get("operational_cleaning_expenses", 0.0))
+            maint_exp = float(financial.get("maintenance_expenses", 0.0))
+            net_profit = float(financial.get("estimated_net_profit", 0.0))
+            margin = float(financial.get("net_margin_pct", 0.0))
+            period = financial.get("period", "Período Atual")
 
-Análise do fluxo de caixa categorizado por imóvel:
+            content = f"""
+### 💰 Visão Financeira & Margem Líquida ({period})
+
+Análise consolidada do fluxo de caixa real do seu portfólio:
 
 | Indicador Financeiro | Valor Consolidado |
 | :--- | :--- |
-| **Receita Bruta de Hospedagem** | R$ {financial.get('gross_revenue'):,.2f} |
-| **Deduções (Taxas de Plataforma)** | - R$ {financial.get('platform_fees_deducted'):,.2f} |
-| **Custos Operacionais de Limpeza** | - R$ {financial.get('operational_cleaning_expenses'):,.2f} |
-| **Manutenções Realizadas** | - R$ {financial.get('maintenance_expenses'):,.2f} |
-| **Resultado Líquido Estimado** | **R$ {financial.get('estimated_net_profit'):,.2f}** |
-| **Margem Líquida da Operação** | **{financial.get('net_margin_pct')}%** |
+| **Receita Bruta de Hospedagem** | R$ {gross:,.2f} |
+| **Deduções (Taxas de Plataforma)** | - R$ {fees:,.2f} |
+| **Custos Operacionais de Limpeza** | - R$ {clean_exp:,.2f} |
+| **Manutenções e Outras Despesas** | - R$ {maint_exp:,.2f} |
+| **Resultado Líquido Estimado** | **R$ {net_profit:,.2f}** |
+| **Margem Líquida da Operação** | **{margin}%** |
 
-#### 📈 Dica de Rentabilidade:
-As reservas diretas geraram 35% do faturamento sem taxa de intermediação, economizando **R$ 620,00** em comissões este mês.
+#### 📈 Recomendação Financeira:
+Mantenha todas as receitas e despesas categorizadas no módulo **Financeiro** para acompanhar a rentabilidade líquida por imóvel.
 """.strip()
-            actions = ["Exportar relatório de fluxo de caixa", "Ver extrato por imóvel", "Cadastrar nova despesa"]
+            actions = ["Ver extrato financeiro", "Registrar nova receita", "Cadastrar nova despesa"]
             return content, actions
 
         # Intenção 4: Precificação Dinâmica (Pricing)
-        if any(w in query_lower for w in ["diária", "diaria", "preço", "preco", "valor", "ajustar"]):
-            content = """
+        if any(w in query_lower for w in ["diária", "diaria", "preço", "preco", "valor", "ajustar", "precificação", "precificacao", "feriado"]):
+            if props:
+                lines = []
+                for idx, p in enumerate(props, start=1):
+                    base_rate = p.get("base_nightly_rate")
+                    clean_fee = p.get("cleaning_fee", 0.0)
+                    loc = f" ({p.get('city')}/{p.get('state')})" if p.get("city") else ""
+                    if base_rate and base_rate > 0:
+                        weekend_rate = round(base_rate * 1.15, 2)
+                        midweek_rate = round(base_rate * 0.90, 2)
+                        lines.append(
+                            f"{idx}. **{p['name']}{loc}:**\n"
+                            f"   - *Diária Base Atual:* R$ {base_rate:,.2f} (Taxa de limpeza: R$ {clean_fee:,.2f})\n"
+                            f"   - *Sugestão para Finais de Semana / Feriados (+15%):* R$ {weekend_rate:,.2f}\n"
+                            f"   - *Sugestão Dias Úteis (-10% para 3+ noites):* R$ {midweek_rate:,.2f}"
+                        )
+                    else:
+                        lines.append(
+                            f"{idx}. **{p['name']}{loc}:**\n"
+                            f"   - *Diária Base Atual:* Não definida (defina o valor base na edição do imóvel para habilitar simulações automáticas)."
+                        )
+                props_pricing_text = "\n\n".join(lines)
+            else:
+                props_pricing_text = "Você ainda não possui imóveis cadastrados. Cadastre seu primeiro imóvel na aba **Imóveis** com a diária base para receber simulações de tarifa."
+
+            content = f"""
 ### 🏷️ Sugestões de Precificação Dinâmica
 
-Com base na demanda atual da sua microrregião e no histórico de ocupação dos seus imóveis:
+Com base nos parâmetros reais dos seus imóveis cadastrados:
 
-1. **Chalé da Montanha (Urubici/SC):**
-   - *Diária Base Atual:* R$ 480,00
-   - *Sugestão para Finais de Semana:* R$ 560,00 (+16% devido à alta procura de inverno).
-   - *Sugestão Dias de Semana:* R$ 420,00 para garantir taxa mínima de 70%.
-
-2. **Studio Beira-Mar (Balneário Camboriú/SC):**
-   - *Diária Base Atual:* R$ 340,00
-   - *Status:* Alta conversão. Mantenha o valor atual e aumente a taxa de limpeza de R$ 100 para R$ 120 para cobrir lavanderia terceirizada.
+{props_pricing_text}
 """.strip()
-            actions = ["Atualizar diárias do Chalé", "Ajustar taxa de limpeza", "Simular receita mensal"]
+            actions = ["Atualizar diárias dos imóveis", "Ajustar taxa de limpeza", "Simular receita mensal"]
             return content, actions
 
-        # Resposta Padrão de Visão Geral com Resumo Operacional
-        prop_names = ", ".join([p["name"] for p in props])
+        # Intenção 5: Tarefas e Checklists
+        if any(w in query_lower for w in ["tarefa", "limpeza", "manutenção", "manutencao", "checklist", "equipe"]):
+            clean_cnt = operations.get("pending_cleaning_count", 0)
+            maint_cnt = operations.get("pending_maintenance_count", 0)
+            overdue_cnt = len(operations.get("overdue_tasks", []))
+            content = f"""
+### 🧹 Status de Operações & Checklists de Campo
+
+Resumo das atividades operacionais nos seus imóveis:
+
+- **Limpezas Pendentes / Em Andamento:** {clean_cnt}
+- **Manutenções Abertas:** {maint_cnt}
+- **Tarefas em Atraso:** {overdue_cnt}
+
+Acesse o módulo **Tarefas & Checklists** para acompanhar o progresso dos itens obrigatórios antes de liberar o próximo check-in.
+""".strip()
+            actions = ["Ver quadro de tarefas", "Criar nova tarefa", "Gerenciar equipe"]
+            return content, actions
+
+        # Resposta Padrão de Visão Geral com Resumo Operacional Real
+        prop_names = ", ".join([p["name"] for p in props]) if props else "Nenhum imóvel cadastrado ainda"
         content = f"""
 ### 🏡 Panorama Operacional do seu Portfólio
 
-Você possui atualmente **{len(props)} imóveis gerenciados** na plataforma: *{prop_names}*.
+Você possui atualmente **{len(props)} imóvel(is) gerenciado(s)** na plataforma: *{prop_names}*.
 
-#### 📌 Resumo Operacional do Dia:
-- **Ocupação Geral:** **{occupancy.get('current_month_occupancy_pct')}%** com {occupancy.get('total_active_reservations')} estadias ativas.
-- **Alertas de Estoque:** {len(inventory)} itens críticos aguardando compra ou reposição.
-- **Check-ins Hoje:** 2 chegadas previstas a partir das 15h.
+#### 📌 Resumo Operacional Consolidado:
+- **Ocupação no Mês:** **{occupancy.get('current_month_occupancy_pct', 0.0)}%** com {occupancy.get('total_active_reservations', 0)} estadia(s) ativa(s).
+- **Alertas de Estoque:** {len(inventory)} item(ns) abaixo do estoque mínimo.
+- **Check-ins Hoje:** {occupancy.get('upcoming_check_ins_today', 0)} chegada(s) prevista(s).
 
-Como posso ajudar você agora? Posso detalhar a precificação, auditar os checklists de limpeza ou projetar o fluxo de caixa do próximo mês.
+Como posso ajudar você agora? Posso analisar a ocupação, verificar suprimentos, detalhar o fluxo de caixa ou sugerir ajustes de diárias.
 """.strip()
         actions = ["Analisar taxa de ocupação", "Verificar suprimentos em falta", "Otimizar preços de diárias"]
         return content, actions
@@ -246,18 +310,69 @@ Como posso ajudar você agora? Posso detalhar a precificação, auditar os check
 
     async def list_active_insights(self, owner_id: uuid.UUID) -> List[AIInsightResponseDTO]:
         insights = await self._ai_repo.list_active_insights(owner_id)
-        # Se ainda não houver insights persistidos, inicializa com insights proativos do contexto
         if not insights:
-            default_insight = AIInsight(
-                owner_id=owner_id,
-                insight_type=InsightType.LOW_STOCK,
-                severity=InsightSeverity.WARNING,
-                title="Estoque Crítico: Papel Higiênico no Studio Beira-Mar",
-                content="Saldo atual de 4 rolos (mínimo recomendado: 8). Há check-in de 4 hóspedes agendado para hoje.",
-                data={"item": "Papel higiênico", "shortage": 4},
-            )
-            saved = await self._ai_repo.save_insight(default_insight)
-            insights = [saved]
+            context = await self._context_builder.build_context_for_owner(owner_id=owner_id)
+            props = context.get("properties", [])
+            low_stock = context.get("inventory_alerts", [])
+            overdue = context.get("operations", {}).get("overdue_tasks", [])
+
+            generated_insights: List[AIInsight] = []
+            if low_stock:
+                first_alert = low_stock[0]
+                generated_insights.append(
+                    AIInsight(
+                        owner_id=owner_id,
+                        insight_type=InsightType.LOW_STOCK,
+                        severity=InsightSeverity.WARNING,
+                        title=f"Estoque Baixo: {first_alert['item_name']} ({first_alert['property_name']})",
+                        content=(
+                            f"Saldo atual de {first_alert['current_quantity']} {first_alert['unit']} "
+                            f"(mínimo configurado: {first_alert['minimum_quantity']} {first_alert['unit']})."
+                        ),
+                        data=first_alert,
+                    )
+                )
+            if overdue:
+                first_task = overdue[0]
+                generated_insights.append(
+                    AIInsight(
+                        owner_id=owner_id,
+                        insight_type=InsightType.OVERDUE_TASKS,
+                        severity=InsightSeverity.CRITICAL,
+                        title=f"Tarefa em Atraso: {first_task['title']}",
+                        content=f"Imóvel: {first_task['property']}. Progresso do checklist: {first_task['checklist_progress']}.",
+                        data=first_task,
+                    )
+                )
+            if not generated_insights:
+                if props:
+                    first_prop = props[0]
+                    generated_insights.append(
+                        AIInsight(
+                            owner_id=owner_id,
+                            insight_type=InsightType.PRICING_OPPORTUNITY,
+                            severity=InsightSeverity.INFO,
+                            title=f"Monitoramento Ativo: {first_prop['name']}",
+                            content=(
+                                f"Ocupação no mês atual em {context['occupancy']['current_month_occupancy_pct']}%. "
+                                "Revise tarifas de meio de semana e estoque preventivo antes dos próximos check-ins."
+                            ),
+                            data={"property_id": first_prop["id"]},
+                        )
+                    )
+                else:
+                    generated_insights.append(
+                        AIInsight(
+                            owner_id=owner_id,
+                            insight_type=InsightType.PRICING_OPPORTUNITY,
+                            severity=InsightSeverity.INFO,
+                            title="Bem-vindo ao Copiloto Operacional",
+                            content="Cadastre seu primeiro imóvel na aba Imóveis para receber alertas automáticos de ocupação, estoque e tarefas.",
+                            data={"onboarding": True},
+                        )
+                    )
+
+            insights = [await self._ai_repo.save_insight(ins) for ins in generated_insights]
 
         return [
             AIInsightResponseDTO(

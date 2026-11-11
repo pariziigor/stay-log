@@ -1,7 +1,20 @@
 import argparse
 import asyncio
+from sqlalchemy import func, select
 from app.core.database import AsyncSessionFactory, Base, engine
 from app.core.security import get_password_hash
+from app.main import DEFAULT_AMENITIES
+from app.modules.ai_assistant.infrastructure.models import (
+    AIConversationModel,
+    AIInsightModel,
+    AIMessageModel,
+)
+from app.modules.bookings.infrastructure.models import GuestModel, ReservationModel
+from app.modules.finance.application.services import DEFAULT_SYSTEM_CATEGORIES
+from app.modules.finance.infrastructure.models import (
+    FinancialCategoryModel,
+    FinancialTransactionModel,
+)
 from app.modules.identity.domain.entities import User
 from app.modules.identity.domain.value_objects import Email, UserRole
 from app.modules.identity.infrastructure.models import (
@@ -11,6 +24,14 @@ from app.modules.identity.infrastructure.models import (
     UserModel,
 )
 from app.modules.identity.infrastructure.repositories import SQLAlchemyUserRepository
+from app.modules.inventory.infrastructure.models import (
+    InventoryItemModel,
+    InventoryMovementModel,
+)
+from app.modules.operations.infrastructure.models import (
+    TaskChecklistItemModel,
+    TaskModel,
+)
 from app.modules.properties.infrastructure.models import (
     AmenityModel,
     PropertyAmenityModel,
@@ -19,16 +40,28 @@ from app.modules.properties.infrastructure.models import (
 
 
 async def init_db_command():
-    """Cria tabelas no banco de dados (útil para desenvolvimento local ou testes)."""
+    """Cria tabelas no banco de dados e popula catálogos de referência iniciais."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("Tabelas inicializadas com sucesso.")
+
+    async with AsyncSessionFactory() as session:
+        amenity_count = (await session.execute(select(func.count(AmenityModel.id)))).scalar_one() or 0
+        if amenity_count == 0:
+            for code, name, cat in DEFAULT_AMENITIES:
+                session.add(AmenityModel(code=code, name=name, category=cat))
+
+        cat_count = (await session.execute(select(func.count(FinancialCategoryModel.id)))).scalar_one() or 0
+        if cat_count == 0:
+            for name, tx_type in DEFAULT_SYSTEM_CATEGORIES:
+                session.add(FinancialCategoryModel(owner_id=None, name=name, type=tx_type, is_active=True))
+
+        await session.commit()
+
+    print("Tabelas e catálogos de referência inicializados com sucesso.")
 
 
 async def create_user_command(full_name: str, email_str: str, password: str, role_str: str):
-    # Assegura que o schema existe antes de inserir
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await init_db_command()
 
     async with AsyncSessionFactory() as session:
         repo = SQLAlchemyUserRepository(session)
@@ -50,7 +83,7 @@ async def create_user_command(full_name: str, email_str: str, password: str, rol
         )
         saved = await repo.save(new_user)
         await session.commit()
-        print(f"Usuário criado com sucesso!")
+        print("Usuário criado com sucesso!")
         print(f"  ID: {saved.id}")
         print(f"  Nome: {saved.full_name}")
         print(f"  E-mail: {saved.email.value}")
@@ -62,7 +95,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Subcomando: init-db
-    subparsers.add_parser("init-db", help="Inicializar schema do banco de dados")
+    subparsers.add_parser("init-db", help="Inicializar schema do banco de dados e catálogos de referência")
 
     # Subcomando: create-user
     create_user_parser = subparsers.add_parser("create-user", help="Criar um usuário")
