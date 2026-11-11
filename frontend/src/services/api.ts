@@ -66,11 +66,10 @@ api.interceptors.response.use(
           .catch((err) => Promise.reject(err));
       }
 
-      originalRequest._retry = true;
-      isRefreshing = true;
-
       const refreshToken = localStorage.getItem('refresh_token');
 
+      // Sem refresh token não há como renovar: encerra a sessão sem travar a fila
+      // (isRefreshing só é ativado depois desta checagem).
       if (!refreshToken) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -78,6 +77,9 @@ api.interceptors.response.use(
         window.dispatchEvent(new Event('auth:logout'));
         return Promise.reject(error);
       }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {

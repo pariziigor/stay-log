@@ -16,7 +16,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole } from '../../types/auth';
 import { cn } from '../../utils/cn';
 
 interface SidebarProps {
@@ -25,7 +24,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
-  const { user, role, logout, switchRoleDemo } = useAuth();
+  const { user, role, logout } = useAuth();
   const navigate = useNavigate();
 
   // Itens de navegação adaptados dinamicamente para o papel do usuário
@@ -158,33 +157,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onCloseMobile }) => {
               </NavLink>
             );
           })}
-        </div>
-
-        {/* Demo Role Switcher (Facilita a avaliação dos 3 perfis solicitados) */}
-        <div className="p-3 mx-4 mb-3 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/40 border border-indigo-100/80">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-brand-500" />
-              Simular Perfil
-            </span>
-            <span className="text-[10px] text-brand-600 font-bold uppercase">{role}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-xl border border-slate-200/80">
-            {(['admin', 'owner', 'employee'] as UserRole[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => switchRoleDemo(r)}
-                className={cn(
-                  'text-[10px] py-1 font-bold rounded-lg transition-all',
-                  role === r
-                    ? 'bg-brand-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                )}
-              >
-                {r === 'admin' ? 'Admin' : r === 'owner' ? 'Gestor' : 'Equipe'}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* User Card & Logout */}

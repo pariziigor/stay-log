@@ -5,6 +5,7 @@ import { Input } from '../common/Input';
 import { Button } from '../common/Button';
 import { Amenity, Property, PropertyCreateData, PropertyType } from '../../types/property';
 import { propertyService } from '../../services/propertyService';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 interface PropertyModalProps {
   isOpen: boolean;
@@ -153,8 +154,8 @@ export const PropertyModal: React.FC<PropertyModalProps> = ({
 
       await onSave(payload);
       onClose();
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.error?.message || 'Falha ao salvar imóvel.');
+    } catch (err) {
+      setErrorMsg(getApiErrorMessage(err, 'Falha ao salvar imóvel.'));
     } finally {
       setIsSubmitting(false);
     }

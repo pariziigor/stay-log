@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { UserRole } from '../types/auth';
+import { getApiErrorMessage } from '../utils/apiError';
 
 export const LoginPage: React.FC = () => {
   const [isRegister, setIsRegister] = useState(false);
@@ -23,7 +23,6 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>('owner');
   const [consentTerms, setConsentTerms] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,21 +32,23 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // evita duplo envio
     setErrorMsg('');
-    setIsSubmitting(true);
 
+    if (isRegister && !consentTerms) {
+      setErrorMsg('É necessário aceitar os termos de uso e política de privacidade (LGPD).');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       if (isRegister) {
-        if (!consentTerms) {
-          setErrorMsg('É necessário aceitar os termos de uso e política de privacidade (LGPD).');
-          setIsSubmitting(false);
-          return;
-        }
+        // O autocadastro público cria sempre um Proprietário; outros perfis são concedidos por convite/administração.
         await register({
           full_name: fullName,
           email,
           password,
-          role,
+          role: 'owner',
           phone: phone || undefined,
           consent_terms: consentTerms,
         });
@@ -55,25 +56,10 @@ export const LoginPage: React.FC = () => {
         await login({ email, password });
       }
       navigate('/dashboard');
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.error?.message || 'Falha ao autenticar. Verifique suas credenciais.');
+    } catch (err) {
+      setErrorMsg(getApiErrorMessage(err, 'Falha ao autenticar. Verifique suas credenciais.'));
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Preenchimento de credenciais para avaliação rápida com 1 clique
-  const setQuickCredentials = (userRole: UserRole) => {
-    setIsRegister(false);
-    if (userRole === 'admin') {
-      setEmail('admin@locacao.com');
-      setPassword('SenhaAdmin123!');
-    } else if (userRole === 'owner') {
-      setEmail('mariana@locacao.com');
-      setPassword('SenhaProprietario123!');
-    } else {
-      setEmail('lucas@locacao.com');
-      setPassword('SenhaFuncionario123!');
     }
   };
 
@@ -157,41 +143,12 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Atalhos Rápidos para Avaliação (1-Clique) */}
-          {!isRegister && (
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <p className="text-[11px] font-extrabold uppercase text-slate-500 mb-2 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-brand-600" /> Preencher credenciais de teste:
-              </p>
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setQuickCredentials('admin')}
-                  className="text-xs font-bold py-1.5 px-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 shadow-2xs transition-all"
-                >
-                  👑 Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickCredentials('owner')}
-                  className="text-xs font-bold py-1.5 px-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 shadow-2xs transition-all"
-                >
-                  🏠 Gestor
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickCredentials('employee')}
-                  className="text-xs font-bold py-1.5 px-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-600 shadow-2xs transition-all"
-                >
-                  🧹 Equipe
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Alerta de Erro */}
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold animate-slide-down">
+            <div
+              role="alert"
+              className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold animate-slide-down"
+            >
               {errorMsg}
             </div>
           )}
@@ -210,31 +167,14 @@ export const LoginPage: React.FC = () => {
                   required
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-                      Perfil de Acesso
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-3 py-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                    >
-                      <option value="owner">Proprietário / Gestor</option>
-                      <option value="employee">Funcionário / Equipe</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Input
-                      label="Telefone (WhatsApp)"
-                      type="tel"
-                      placeholder="(48) 99999-8888"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      leftIcon={<Phone className="w-4 h-4" />}
-                    />
-                  </div>
-                </div>
+                <Input
+                  label="Telefone (WhatsApp)"
+                  type="tel"
+                  placeholder="(48) 99999-8888"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  leftIcon={<Phone className="w-4 h-4" />}
+                />
               </>
             )}
 

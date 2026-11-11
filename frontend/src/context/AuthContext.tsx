@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthTokens, LoginCredentials, RegisterData, User, UserRole } from '../types/auth';
 import { authService } from '../services/authService';
 
@@ -10,152 +10,93 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
-  switchRoleDemo: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Dados padrão para navegação e demonstração instantânea
-const DEMO_USERS: Record<UserRole, User> = {
-  admin: {
-    id: '00000000-0000-0000-0000-00000000000a',
-    full_name: 'Rodrigo Admin',
-    email: 'admin@locacao.com',
-    role: 'admin',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    last_login_at: new Date().toISOString(),
-  },
-  owner: {
-    id: '00000000-0000-0000-0000-00000000000b',
-    full_name: 'Mariana Proprietária',
-    email: 'mariana@locacao.com',
-    role: 'owner',
-    phone: '(48) 99888-7766',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    last_login_at: new Date().toISOString(),
-  },
-  employee: {
-    id: '00000000-0000-0000-0000-00000000000c',
-    full_name: 'Lucas Operacional',
-    email: 'lucas@locacao.com',
-    role: 'employee',
-    phone: '(48) 98765-4321',
-    is_active: true,
-    created_at: new Date().toISOString(),
-    last_login_at: new Date().toISOString(),
-  },
+const clearSession = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('current_user'); // chave legada, não é mais usada
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Restaura a sessão validando o token no servidor (nunca confia em dados salvos no navegador).
   useEffect(() => {
-    // Restaura sessão existente do localStorage
-    const initAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      const savedUser = localStorage.getItem('current_user');
+    let cancelled = false;
 
-      if (token && savedUser) {
-        try {
-          setUser(JSON.parse(savedUser));
-        } catch {
-          localStorage.clear();
-        }
+    const restoreSession = async () => {
+      if (!localStorage.getItem('access_token')) {
+        setIsLoading(false);
+        return;
       }
-      setIsLoading(false);
+      try {
+        const me = await authService.getMe();
+        if (!cancelled) setUser(me);
+      } catch {
+        clearSession();
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     };
 
-    initAuth();
+    restoreSession();
 
-    // Listener para logout disparado pelo interceptor do Axios
-    const handleForceLogout = () => {
-      setUser(null);
-    };
+    // Logout forçado disparado pelo interceptor do Axios (refresh token inválido/expirado)
+    const handleForceLogout = () => setUser(null);
     window.addEventListener('auth:logout', handleForceLogout);
-    return () => window.removeEventListener('auth:logout', handleForceLogout);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('auth:logout', handleForceLogout);
+    };
   }, []);
 
-  const login = async (credentials: LoginCredentials) => {
-    setIsLoading(true);
+  // Erros da API são propagados ao chamador (LoginPage) para exibir a mensagem real ao usuário.
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    const tokens: AuthTokens = await authService.login(credentials);
+    localStorage.setItem('access_token', tokens.access_token);
+    localStorage.setItem('refresh_token', tokens.refresh_token);
     try {
-      // Tenta autenticar na API real
-      const tokens: AuthTokens = await authService.login(credentials);
-      localStorage.setItem('access_token', tokens.access_token);
-      localStorage.setItem('refresh_token', tokens.refresh_token);
-
-      const loggedUser: User = {
-        id: tokens.user_id,
-        full_name: tokens.full_name,
-        email: credentials.email,
-        role: tokens.role,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        last_login_at: new Date().toISOString(),
-      };
-
-      localStorage.setItem('current_user', JSON.stringify(loggedUser));
-      setUser(loggedUser);
-    } catch (err: unknown) {
-      // Se a API estiver offline em modo de teste/demonstração, simula o perfil solicitado
-      const emailLower = credentials.email.toLowerCase();
-      let demoRole: UserRole = 'owner';
-      if (emailLower.includes('admin')) demoRole = 'admin';
-      else if (emailLower.includes('func') || emailLower.includes('employee')) demoRole = 'employee';
-
-      const demoUser = { ...DEMO_USERS[demoRole], email: credentials.email };
-      localStorage.setItem('access_token', 'demo-access-token');
-      localStorage.setItem('refresh_token', 'demo-refresh-token');
-      localStorage.setItem('current_user', JSON.stringify(demoUser));
-      setUser(demoUser);
-    } finally {
-      setIsLoading(false);
+      setUser(await authService.getMe());
+    } catch (err) {
+      clearSession();
+      throw err;
     }
-  };
+  }, []);
 
-  const register = async (data: RegisterData) => {
-    setIsLoading(true);
-    try {
-      const registered = await authService.register(data);
-      // Realiza login imediato
+  const register = useCallback(
+    async (data: RegisterData) => {
+      await authService.register(data);
       await login({ email: data.email, password: data.password });
-    } catch {
-      // Fallback amigável de demonstração
-      await login({ email: data.email, password: data.password });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [login]
+  );
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     const refreshToken = localStorage.getItem('refresh_token');
     if (refreshToken) {
       await authService.logout(refreshToken);
     }
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('current_user');
+    clearSession();
     setUser(null);
-  };
+  }, []);
 
-  const switchRoleDemo = (targetRole: UserRole) => {
-    const newUser = DEMO_USERS[targetRole];
-    localStorage.setItem('current_user', JSON.stringify(newUser));
-    setUser(newUser);
-  };
-
-  const value: AuthContextType = {
-    user,
-    role: user?.role || null,
-    isAuthenticated: !!user,
-    isLoading,
-    login,
-    register,
-    logout,
-    switchRoleDemo,
-  };
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      role: user?.role ?? null,
+      isAuthenticated: !!user,
+      isLoading,
+      login,
+      register,
+      logout,
+    }),
+    [user, isLoading, login, register, logout]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
