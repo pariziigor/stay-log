@@ -14,15 +14,17 @@ class Base(DeclarativeBase):
 
 
 # Configuração do Engine Assíncrono do SQLAlchemy
-engine_kwargs = {"echo": False, "future": True}
+engine_kwargs: dict = {"echo": False, "future": True}
 
 # Conexões SQLite precisam de connect_args específicos para multithreading em async
 if settings.DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_size"] = 10
-    engine_kwargs["max_overflow"] = 20
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 10
+    # Compatibilidade total com o PgBouncer / Connection Pooler do Supabase (:6543 e :5432)
+    engine_kwargs["connect_args"] = {"statement_cache_size": 0}
 
 engine: AsyncEngine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 

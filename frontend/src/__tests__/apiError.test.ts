@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { getApiErrorMessage } from '../utils/apiError';
+import { resolveApiBaseUrl } from '../services/api';
 
 function axiosError(status: number | null, data?: unknown): AxiosError {
   const config = { headers: new AxiosHeaders() };
@@ -38,5 +39,22 @@ describe('getApiErrorMessage', () => {
 
   it('usa o fallback para erros que não vêm do Axios', () => {
     expect(getApiErrorMessage(new Error('x'), 'Falha X')).toBe('Falha X');
+  });
+});
+
+describe('resolveApiBaseUrl', () => {
+  it('anexa /api/v1 automaticamente quando a URL do Render não possui o sufixo', () => {
+    expect(resolveApiBaseUrl('https://hospedaai-backend.onrender.com')).toBe(
+      'https://hospedaai-backend.onrender.com/api/v1'
+    );
+    expect(resolveApiBaseUrl('https://hospedaai-backend.onrender.com/')).toBe(
+      'https://hospedaai-backend.onrender.com/api/v1'
+    );
+  });
+
+  it('preserva /api/v1 quando já informado', () => {
+    expect(resolveApiBaseUrl('https://hospedaai-backend.onrender.com/api/v1')).toBe(
+      'https://hospedaai-backend.onrender.com/api/v1'
+    );
   });
 });

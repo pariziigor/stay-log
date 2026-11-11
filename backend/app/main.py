@@ -64,22 +64,43 @@ DEFAULT_AMENITIES = [
 ]
 
 
+from app.modules.finance.application.services import DEFAULT_SYSTEM_CATEGORIES
+
+
 async def _seed_reference_catalog_if_empty() -> None:
     async with AsyncSessionFactory() as session:
         count = (await session.execute(select(func.count(AmenityModel.id)))).scalar_one() or 0
         if count == 0:
             for code, name, cat in DEFAULT_AMENITIES:
                 session.add(AmenityModel(code=code, name=name, category=cat))
-            await session.commit()
+
+        cat_count = (
+            await session.execute(
+                select(func.count(FinancialCategoryModel.id)).where(
+                    FinancialCategoryModel.owner_id.is_(None)
+                )
+            )
+        ).scalar_one() or 0
+        if cat_count == 0:
+            for name, tx_type in DEFAULT_SYSTEM_CATEGORIES:
+                session.add(
+                    FinancialCategoryModel(
+                        owner_id=None,
+                        name=name,
+                        type=tx_type,
+                        is_active=True,
+                    )
+                )
+
+        await session.commit()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Cria tabelas e catálogo de referência se estiver rodando em SQLite dev/test
-    if settings.DATABASE_URL.startswith("sqlite"):
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        await _seed_reference_catalog_if_empty()
+    # Garante que todas as tabelas e catálogos de referência existam ao iniciar (SQLite dev ou PostgreSQL Supabase/Render)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await _seed_reference_catalog_if_empty()
     yield
     await engine.dispose()
 

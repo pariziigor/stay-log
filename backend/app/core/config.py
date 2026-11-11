@@ -1,3 +1,4 @@
+import json
 from typing import List, Union
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,20 +33,39 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./locacao_dev.db"
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
+    # CORS (aceita lista JSON ou string separada por vírgulas no Render)
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
     ]
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        """Converte URIs padrão do Supabase/Render (postgres:// ou postgresql://) para o driver asyncpg."""
+        if not isinstance(v, str):
+            return v
+        url = v.strip()
+        if url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[len("postgres://") :]
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+        return url
+
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, list):
-            return v
+        if isinstance(v, str):
+            raw = v.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                parsed = json.loads(raw)
+                return [str(i).strip().rstrip("/") for i in parsed if str(i).strip()]
+            return [i.strip().rstrip("/") for i in raw.split(",") if i.strip()]
+        if isinstance(v, list):
+            return [str(i).strip().rstrip("/") for i in v if str(i).strip()]
         return []
 
     @model_validator(mode="after")
